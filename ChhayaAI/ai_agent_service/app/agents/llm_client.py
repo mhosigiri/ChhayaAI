@@ -14,10 +14,28 @@ RULES:
 
 # Used only by supervisor intent routing — not mixed with geo/JSON instructions.
 CLASSIFICATION_SYSTEM_PROMPT = """You are a strict intent classifier.
-Reply with exactly one word and nothing else: MAP or DATA.
+Reply with exactly one word and nothing else: MAP, DATA, or ALERT.
 
 MAP = navigation, locations, safety zones, directions, or where something is.
-DATA = general chat, weather, feelings, explanations, or what/why when not about places."""
+DATA = general chat, weather, casual explanations, or what/why when not about places or distress.
+ALERT = user expresses distress, fear, feeling unsafe, urgent need for help, danger, or crisis."""
+
+_ALERT_KEYWORDS = (
+    "feel unsafe",
+    "i feel unsafe",
+    "unsafe",
+    "urgent help",
+    "need urgent",
+    "something is wrong",
+    "in danger",
+    "threatened",
+    "help me",
+    "distress",
+    "scared",
+    "something wrong",
+    "need help now",
+    "afraid",
+)
 
 _MAP_KEYWORDS = (
     "where",
@@ -48,6 +66,8 @@ client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 def _keyword_fallback_intent(query: str) -> str:
     """When Groq is unavailable or the model reply is ambiguous — deterministic routing."""
     q = query.lower()
+    if any(k in q for k in _ALERT_KEYWORDS):
+        return "ALERT"
     if any(k in q for k in _MAP_KEYWORDS):
         return "MAP"
     return "DATA"
@@ -57,6 +77,8 @@ def _normalize_classifier_output(raw: str | None) -> str | None:
     if not raw:
         return None
     r = raw.strip().upper()
+    if "ALERT" in r:
+        return "ALERT"
     has_map = "MAP" in r
     has_data = "DATA" in r
     if has_map and not has_data:
@@ -72,8 +94,8 @@ def _normalize_classifier_output(raw: str | None) -> str | None:
 
 def classify_map_or_data(query: str) -> str:
     """
-    Returns exactly 'MAP' or 'DATA' for supervisor routing.
-    Uses a minimal system prompt; on API/parse failure, uses keyword fallback (not conversational text).
+    Returns 'MAP', 'DATA', or 'ALERT' for routing (legacy name kept for imports).
+    Uses a minimal system prompt; on API/parse failure, uses keyword fallback.
     """
     try:
         completion = client.chat.completions.create(
@@ -83,7 +105,7 @@ def classify_map_or_data(query: str) -> str:
                 {"role": "user", "content": f"Query: {query}\n\nOne word:"},
             ],
             temperature=0,
-            max_tokens=8,
+            max_tokens=10,
         )
         raw = completion.choices[0].message.content
         normalized = _normalize_classifier_output(raw)
@@ -93,6 +115,11 @@ def classify_map_or_data(query: str) -> str:
     except Exception as e:
         print(f"ERROR calling Groq (classifier): {e}")
         return _keyword_fallback_intent(query)
+
+
+def classify_intent(query: str) -> str:
+    """Supervisor-facing API: MAP, DATA, or ALERT."""
+    return classify_map_or_data(query)
 
 
 def get_ai_response(user_input: str):
