@@ -86,4 +86,4 @@ def process_user_request(user_id, session_id, query, lat, lon, trigger_type):
             lon=lon,
         )
 
-    return handle_data_task(query, history)
+    return handle_data_task(query, chat_history=history)
