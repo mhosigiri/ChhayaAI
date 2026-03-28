@@ -1,0 +1,77 @@
+## Xcode artifacts
+
+DerivedData/
+build/
+.build/
+*.xcuserstate
+*.xcscmblueprint
+xcuserdata/
+*.moved-aside
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+
+*.xcodeproj
+*.xcworkspace 
+##if it is your real workspace
+Package.swift
+
+Package.resolved 
+##in most app repos
+
+.build/
+Carthage/Build/
+Pods/
+
+Package.swift
+Package.resolved
+Podfile
+Podfile.lock
+Cartfile
+Cartfile.resolved
+
+## Python backend and cloud run service
+
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+.venv/
+venv/
+env/
+
+
+## Node tooling but we prolly wont need it lol
+
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/cache/
+.next/
+.turbo/
+coverage/
+
+##Secrets and environment files
+
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.p12
+*.p8
+*.mobileprovision
+GoogleService-Info.plist
+Secrets.plist
+secrets.json
+service-account*.json
+firebase-adminsdk*.json
+supabase/.temp/
+supabase/.branches/
