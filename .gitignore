@@ -52,6 +52,10 @@ venv/
 env/
 
 
+## Firebase Cloud Functions build artifacts
+
+functions/lib/
+
 ## Node tooling but we prolly wont need it lol
 
 node_modules/
