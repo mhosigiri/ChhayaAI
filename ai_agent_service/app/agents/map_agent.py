@@ -73,9 +73,10 @@ def build_find_helpers_query(lat: float, lon: float, user_id: str) -> str:
       AND h.help_status = 'AVAILABLE'
       AND h.user_id != '{user_id}'
       AND h.last_seen_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_FRESHNESS_MINUTES} MINUTE)
-    RETURN h.user_id, h.lat, h.lon, h.last_seen_at
+    RETURN h.user_id, h.name, h.lat, h.lon, h.last_seen_at,
+           DISTANCE(h, STRUCT(lat: {lat}, lon: {lon})) AS distance
     ORDER BY DISTANCE(h, STRUCT(lat: {lat}, lon: {lon})) ASC
-    LIMIT 1
+    LIMIT 5
     """
 
 
@@ -88,9 +89,10 @@ def build_find_victims_query(lat: float, lon: float, user_id: str) -> str:
       AND v.help_status = 'SEARCHING'
       AND v.user_id != '{user_id}'
       AND v.last_seen_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_FRESHNESS_MINUTES} MINUTE)
-    RETURN v.user_id, v.lat, v.lon, v.last_seen_at
+    RETURN v.user_id, v.name, v.lat, v.lon, v.last_seen_at,
+           DISTANCE(v, STRUCT(lat: {lat}, lon: {lon})) AS distance
     ORDER BY DISTANCE(v, STRUCT(lat: {lat}, lon: {lon})) ASC
-    LIMIT 1
+    LIMIT 5
     """
 
 
@@ -114,6 +116,7 @@ def build_map_payload(
     match_id: str | None,
     requester: dict,
     matched_user: dict | None,
+    nearby_helpers: list | None,
     route_coordinates: list,
     distance: float | None,
 ) -> dict:
@@ -123,6 +126,7 @@ def build_map_payload(
         "match_status": match_status,
         "requester": requester,
         "matched_user": matched_user,
+        "nearby_helpers": nearby_helpers,
         "route_coordinates": route_coordinates,
         "distance": distance,
     }
@@ -193,6 +197,7 @@ def handle_map_task(
             match_id=None,
             requester=requester,
             matched_user=None,
+            nearby_helpers=[],
             route_coordinates=[],
             distance=None,
         )
@@ -206,13 +211,26 @@ def handle_map_task(
             "ui_actions": _ui_actions(request_mode, emergency, matched=False),
         }
 
-    row = rows[0]
+    nearby_helpers = [
+        {
+            "user_id": row.get("user_id"),
+            "name": row.get("name", "Unknown"),
+            "role": "HELPER" if match_type == "FIND_NEARBY_HELPERS" else "VICTIM",
+            "lat": row.get("lat"),
+            "lon": row.get("lon"),
+            "distance": row.get("distance"),
+        }
+        for row in rows
+        if row.get("user_id") is not None
+    ]
+    row = nearby_helpers[0]
     matched_user = {
         "user_id": row.get("user_id"),
         "name": row.get("name", "Unknown"),
-        "role": "HELPER" if match_type == "FIND_NEARBY_HELPERS" else "VICTIM",
+        "role": row.get("role"),
         "lat": row.get("lat"),
         "lon": row.get("lon"),
+        "distance": row.get("distance"),
     }
 
     existing_match = _fetch_match(
@@ -230,6 +248,7 @@ def handle_map_task(
         match_id=match_id,
         requester=requester,
         matched_user=matched_user,
+        nearby_helpers=nearby_helpers,
         route_coordinates=[],  # TODO: generate route when routing service is wired
         distance=row.get("distance"),
     )

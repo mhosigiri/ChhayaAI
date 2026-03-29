@@ -1,1 +1,1 @@
-Welcome to ChayyAI. Your go-to de-escaltion app! This is a hackathon project!
+Welcome to ChhayaAI. Your go-to de-escaltion app! This is a hackathon project! 

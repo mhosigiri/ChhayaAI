@@ -12,9 +12,11 @@ struct AlertItem: Identifiable {
 
 struct AlertFeedView: View {
     @Environment(AgentSessionStore.self) private var sessionStore
+    @Environment(\.selectedTabBinding) private var selectedTabBinding
 
     @State private var selectedFilter: AlertFilter = .all
     @State private var searchText = ""
+    @State private var selectedAlert: AlertItem?
 
     /// Static UI samples; live alert copy comes from the assistant above when available.
     private let alerts: [AlertItem] = AlertFeedView.sampleAlerts
@@ -36,6 +38,9 @@ struct AlertFeedView: View {
             alertList
         }
         .background(ComponentColor.Screen.bg)
+        .sheet(item: $selectedAlert) { alert in
+            alertDetailSheet(alert)
+        }
     }
 
     // MARK: - Filter Bar
@@ -177,7 +182,9 @@ struct AlertFeedView: View {
                         .foregroundStyle(SemanticColor.textSecondary)
                     Spacer()
                     HStack(spacing: Spacing.space2) {
-                        Button("Details") {}
+                        Button("Details") {
+                            selectedAlert = alert
+                        }
                             .textStyle(.captionMedium)
                             .foregroundStyle(SemanticColor.actionPrimary)
                         if alert.severity == .critical {
@@ -186,12 +193,64 @@ struct AlertFeedView: View {
                                 icon: "arrow.right",
                                 style: .primary,
                                 isFullWidth: false
-                            ) {}
+                            ) {
+                                selectedTabBinding?.wrappedValue = .map
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    private func alertDetailSheet(_ alert: AlertItem) -> some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.space4) {
+                    InfoCard(severity: alert.severity) {
+                        VStack(alignment: .leading, spacing: Spacing.space3) {
+                            HStack {
+                                Text(alert.title)
+                                    .textStyle(.headingMD)
+                                    .foregroundStyle(SemanticColor.textPrimary)
+                                Spacer()
+                                StatusBadge(variant: alert.badge)
+                            }
+                            Text(alert.description)
+                                .textStyle(.body)
+                                .foregroundStyle(SemanticColor.textSecondary)
+                            Text(alert.time)
+                                .textStyle(.caption)
+                                .foregroundStyle(SemanticColor.textSecondary)
+                        }
+                    }
+
+                    if alert.severity == .critical {
+                        AppButton(
+                            title: "Open Live Map",
+                            icon: "map.fill",
+                            style: .primary
+                        ) {
+                            selectedAlert = nil
+                            selectedTabBinding?.wrappedValue = .map
+                        }
+                    } else {
+                        AppButton(
+                            title: "Open Chat",
+                            icon: "bubble.left.fill",
+                            style: .secondary
+                        ) {
+                            selectedAlert = nil
+                            selectedTabBinding?.wrappedValue = .chat
+                        }
+                    }
+                }
+                .padding(Spacing.screenPaddingH)
+            }
+            .navigationTitle("Alert Details")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .presentationDetents([.medium, .large])
     }
 
     // MARK: - Sample Data

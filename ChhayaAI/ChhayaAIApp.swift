@@ -10,6 +10,7 @@ struct ChhayaAIApp: App {
 
     init() {
         FirebaseConfiguration.ensureConfigured()
+        MapsConfiguration.configureSDKIfNeeded()
     }
 
     var body: some Scene {

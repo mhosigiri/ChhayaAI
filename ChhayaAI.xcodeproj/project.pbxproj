@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		5E384B6B2F78594700EB841B /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 5E384B6A2F78594700EB841B /* FirebaseAuth */; };
 		5E384B6D2F78594800EB841B /* FirebaseAuthCombine-Community in Frameworks */ = {isa = PBXBuildFile; productRef = 5E384B6C2F78594800EB841B /* FirebaseAuthCombine-Community */; };
+		6A4F0A4D57D54D5B8A3D2F10 /* GoogleMaps in Frameworks */ = {isa = PBXBuildFile; productRef = 6A4F0A4D57D54D5B8A3D2F11 /* GoogleMaps */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -30,6 +31,7 @@
 			files = (
 				5E384B6B2F78594700EB841B /* FirebaseAuth in Frameworks */,
 				5E384B6D2F78594800EB841B /* FirebaseAuthCombine-Community in Frameworks */,
+				6A4F0A4D57D54D5B8A3D2F10 /* GoogleMaps in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -74,6 +76,7 @@
 			packageProductDependencies = (
 				5E384B6A2F78594700EB841B /* FirebaseAuth */,
 				5E384B6C2F78594800EB841B /* FirebaseAuthCombine-Community */,
+				6A4F0A4D57D54D5B8A3D2F11 /* GoogleMaps */,
 			);
 			productName = ChhayaAI;
 			productReference = A7CB6D752F77885C00A0E6C6 /* ChhayaAI.app */;
@@ -105,6 +108,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				5E384B692F78594700EB841B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				6A4F0A4D57D54D5B8A3D2F12 /* XCRemoteSwiftPackageReference "ios-maps-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A7CB6D762F77885C00A0E6C6 /* Products */;
@@ -261,6 +265,7 @@
 		A7CB6D812F77885D00A0E6C6 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				AGENT_API_BASE_URL = "http://127.0.0.1:8000";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ChhayaAI/ChhayaAI.entitlements;
@@ -270,75 +275,78 @@
 				DEVELOPMENT_TEAM = HYBDQX8K49;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_AGENT_API_BASE_URL = "http://127.0.0.1:8000";
-				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "ChhayaAI uses your location for SOS, map matching, and emergency flows.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/ChhayaAI/ai_agent_service/.venv/lib/python3.12/site-packages/pydantic_core",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.nikesh.chhayaai;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				PROVISIONING_PROFILE_SPECIFIER = "";
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
+				GOOGLE_MAPS_API_KEY = "AIzaSyDCbWxlGKqvNR2DW2c-xZg8p6Wxt1z_L0g";
+				GOOGLE_MAPS_MAP_ID = 4a9498d10a4cb2743981e85f;
+			INFOPLIST_FILE = Info.plist;
+			INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "ChhayaAI uses your location for SOS, map matching, and emergency flows.";
+			INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+			INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+			INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+			INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+			INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+			LD_RUNPATH_SEARCH_PATHS = (
+				"$(inherited)",
+				"@executable_path/Frameworks",
+			);
+			LIBRARY_SEARCH_PATHS = (
+				"$(inherited)",
+				"$(PROJECT_DIR)/ChhayaAI/ai_agent_service/.venv/lib/python3.12/site-packages/pydantic_core",
+			);
+			MARKETING_VERSION = 1.0;
+			PRODUCT_BUNDLE_IDENTIFIER = com.nikesh.chhayaai;
+			PRODUCT_NAME = "$(TARGET_NAME)";
+			PROVISIONING_PROFILE_SPECIFIER = "";
+			STRING_CATALOG_GENERATE_SYMBOLS = YES;
+			SWIFT_APPROACHABLE_CONCURRENCY = YES;
+			SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+			SWIFT_EMIT_LOC_STRINGS = YES;
+			SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+			SWIFT_VERSION = 5.0;
+			TARGETED_DEVICE_FAMILY = "1,2";
 		};
+		name = Debug;
+	};
 		A7CB6D822F77885D00A0E6C6 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = ChhayaAI/ChhayaAI.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = HYBDQX8K49;
-				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_AGENT_API_BASE_URL = "http://127.0.0.1:8000";
-				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "ChhayaAI uses your location for SOS, map matching, and emergency flows.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/ChhayaAI/ai_agent_service/.venv/lib/python3.12/site-packages/pydantic_core",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.nikesh.chhayaai;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Release;
+		isa = XCBuildConfiguration;
+		buildSettings = {
+			AGENT_API_BASE_URL = "https://YOUR_CLOUD_RUN_URL";
+			ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+			ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+			CODE_SIGN_ENTITLEMENTS = ChhayaAI/ChhayaAI.entitlements;
+			CODE_SIGN_STYLE = Automatic;
+			CURRENT_PROJECT_VERSION = 1;
+			DEVELOPMENT_TEAM = HYBDQX8K49;
+			ENABLE_PREVIEWS = YES;
+			GENERATE_INFOPLIST_FILE = YES;
+			GOOGLE_MAPS_API_KEY = "AIzaSyDCbWxlGKqvNR2DW2c-xZg8p6Wxt1z_L0g";
+			GOOGLE_MAPS_MAP_ID = 4a9498d10a4cb2743981e85f;
+			INFOPLIST_FILE = Info.plist;
+			INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "ChhayaAI uses your location for SOS, map matching, and emergency flows.";
+			INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+			INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+			INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+			INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+			INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+			LD_RUNPATH_SEARCH_PATHS = (
+				"$(inherited)",
+				"@executable_path/Frameworks",
+			);
+			LIBRARY_SEARCH_PATHS = (
+				"$(inherited)",
+				"$(PROJECT_DIR)/ChhayaAI/ai_agent_service/.venv/lib/python3.12/site-packages/pydantic_core",
+			);
+			MARKETING_VERSION = 1.0;
+			PRODUCT_BUNDLE_IDENTIFIER = com.nikesh.chhayaai;
+			PRODUCT_NAME = "$(TARGET_NAME)";
+			STRING_CATALOG_GENERATE_SYMBOLS = YES;
+			SWIFT_APPROACHABLE_CONCURRENCY = YES;
+			SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+			SWIFT_EMIT_LOC_STRINGS = YES;
+			SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+			SWIFT_VERSION = 5.0;
+			TARGETED_DEVICE_FAMILY = "1,2";
+		};
+		name = Release;
 		};
 /* End XCBuildConfiguration section */
 
@@ -372,6 +380,14 @@
 				minimumVersion = 12.11.0;
 			};
 		};
+		6A4F0A4D57D54D5B8A3D2F12 /* XCRemoteSwiftPackageReference "ios-maps-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googlemaps/ios-maps-sdk";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -384,6 +400,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 5E384B692F78594700EB841B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = "FirebaseAuthCombine-Community";
+		};
+		6A4F0A4D57D54D5B8A3D2F11 /* GoogleMaps */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6A4F0A4D57D54D5B8A3D2F12 /* XCRemoteSwiftPackageReference "ios-maps-sdk" */;
+			productName = GoogleMaps;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

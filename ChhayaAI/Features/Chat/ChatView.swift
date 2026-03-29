@@ -1,5 +1,6 @@
 import FirebaseAuth
 import SwiftUI
+import UIKit
 
 struct ChatView: View {
     @Environment(AuthService.self) private var authService
@@ -7,6 +8,7 @@ struct ChatView: View {
     @Environment(AgentSessionStore.self) private var sessionStore
     @Environment(LocationManager.self) private var locationManager
     @Environment(\.selectedTabBinding) private var selectedTabBinding
+    @Environment(\.openURL) private var openURL
 
     @State private var inputText = ""
     @State private var messages: [ChatMessage] = [
@@ -86,7 +88,9 @@ struct ChatView: View {
                     ]
                     errorBanner = nil
                 }
-                Button("Agent Settings", systemImage: "gearshape") {}
+                Button("Agent Settings", systemImage: "gearshape") {
+                    openAppSettings()
+                }
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 16, weight: .semibold))
@@ -259,6 +263,11 @@ struct ChatView: View {
                 cont.resume(returning: token)
             } ?? cont.resume(returning: nil)
         }
+    }
+
+    private func openAppSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        openURL(url)
     }
 }
 

@@ -1,14 +1,39 @@
+import CoreLocation
 import FirebaseAuth
+import Foundation
+import GoogleMaps
 import SwiftUI
-import MapKit
 
-struct AmbulanceAnnotation: Identifiable, Hashable {
+private struct LiveMapMarker: Identifiable, Hashable {
+    enum Kind {
+        case requester
+        case matchedUser
+        case nearbyUser
+
+        var title: String {
+            switch self {
+            case .requester:   return "You"
+            case .matchedUser: return "Matched User"
+            case .nearbyUser:  return "Nearby User"
+            }
+        }
+
+        var color: UIColor {
+            switch self {
+            case .requester:   return .systemBlue
+            case .matchedUser: return .systemRed
+            case .nearbyUser:  return .systemGreen
+            }
+        }
+    }
+
     let id: String
     let coordinate: CLLocationCoordinate2D
-    let status: BadgeVariant
-    let type: String
+    let name: String
+    let subtitle: String
+    let kind: Kind
 
-    static func == (lhs: AmbulanceAnnotation, rhs: AmbulanceAnnotation) -> Bool {
+    static func == (lhs: LiveMapMarker, rhs: LiveMapMarker) -> Bool {
         lhs.id == rhs.id
     }
 
@@ -17,16 +42,136 @@ struct AmbulanceAnnotation: Identifiable, Hashable {
     }
 }
 
-struct AlertZone: Identifiable {
-    let id: String
-    let coordinate: CLLocationCoordinate2D
-    let radiusMeters: Double
-    let severity: ZoneSeverity
+private struct GoogleLiveMapView: UIViewRepresentable {
+    let centerCoordinate: CLLocationCoordinate2D
+    let markers: [LiveMapMarker]
+    let routeCoordinates: [CLLocationCoordinate2D]
+    let cameraRequestID: UUID
+    @Binding var selectedMarkerID: String?
 
-    enum ZoneSeverity {
-        case danger
-        case caution
-        case safe
+    final class Coordinator: NSObject, GMSMapViewDelegate {
+        var parent: GoogleLiveMapView
+        var markerByID: [String: GMSMarker] = [:]
+        var lastCameraRequestID: UUID?
+
+        init(parent: GoogleLiveMapView) {
+            self.parent = parent
+        }
+
+        func mapView(_ mapView: GMSMapView, didTap marker: GMSMarker) -> Bool {
+            parent.selectedMarkerID = marker.userData as? String
+            return false
+        }
+
+        func mapView(_ mapView: GMSMapView, didTapAt coordinate: CLLocationCoordinate2D) {
+            parent.selectedMarkerID = nil
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeUIView(context: Context) -> GMSMapView {
+        MapsConfiguration.configureSDKIfNeeded()
+
+        let options = GMSMapViewOptions()
+        options.camera = GMSCameraPosition.camera(
+            withLatitude: centerCoordinate.latitude,
+            longitude: centerCoordinate.longitude,
+            zoom: 14
+        )
+        if let mapID = MapsConfiguration.mapID, !mapID.isEmpty {
+            options.mapID = GMSMapID(identifier: mapID)
+        }
+
+        let mapView = GMSMapView(options: options)
+        mapView.delegate = context.coordinator
+        mapView.isMyLocationEnabled = true
+        mapView.settings.myLocationButton = true
+        mapView.settings.compassButton = true
+        mapView.settings.zoomGestures = true
+        mapView.settings.scrollGestures = true
+        return mapView
+    }
+
+    func updateUIView(_ uiView: GMSMapView, context: Context) {
+        context.coordinator.parent = self
+        uiView.clear()
+        context.coordinator.markerByID = [:]
+
+        if routeCoordinates.count > 1 {
+            let path = GMSMutablePath()
+            routeCoordinates.forEach { path.add($0) }
+            let polyline = GMSPolyline(path: path)
+            polyline.strokeColor = .systemBlue
+            polyline.strokeWidth = 4
+            polyline.geodesic = true
+            polyline.map = uiView
+        }
+
+        for item in markers {
+            let marker = GMSMarker()
+            marker.position = item.coordinate
+            marker.title = item.name
+            marker.snippet = item.subtitle
+            marker.userData = item.id
+            marker.icon = GMSMarker.markerImage(with: item.kind.color)
+            marker.appearAnimation = .pop
+            marker.map = uiView
+            context.coordinator.markerByID[item.id] = marker
+        }
+
+        if let selectedMarkerID,
+           let selectedMarker = context.coordinator.markerByID[selectedMarkerID] {
+            uiView.selectedMarker = selectedMarker
+        } else {
+            uiView.selectedMarker = nil
+        }
+
+        if context.coordinator.lastCameraRequestID != cameraRequestID {
+            focusMap(uiView)
+            context.coordinator.lastCameraRequestID = cameraRequestID
+        }
+    }
+
+    private func focusMap(_ mapView: GMSMapView) {
+        if let selectedMarkerID,
+           let selectedMarker = markers.first(where: { $0.id == selectedMarkerID }) {
+            mapView.animate(toLocation: selectedMarker.coordinate)
+            mapView.animate(toZoom: 15)
+            return
+        }
+
+        let points = routeCoordinates + markers.map(\.coordinate)
+        guard let first = points.first else {
+            mapView.animate(toLocation: centerCoordinate)
+            mapView.animate(toZoom: 14)
+            return
+        }
+
+        var bounds = GMSCoordinateBounds(coordinate: first, coordinate: first)
+        for point in points.dropFirst() {
+            bounds = bounds.includingCoordinate(point)
+        }
+        let update = GMSCameraUpdate.fit(bounds, withPadding: 72)
+        mapView.animate(with: update)
+    }
+}
+
+private extension MapActorDTO {
+    var coordinate: CLLocationCoordinate2D? {
+        guard let lat, let lon else { return nil }
+        guard (-90.0...90.0).contains(lat), (-180.0...180.0).contains(lon) else { return nil }
+        return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+    }
+}
+
+private extension MapCoordinateDTO {
+    var coordinate: CLLocationCoordinate2D? {
+        guard let lat, let lon else { return nil }
+        guard (-90.0...90.0).contains(lat), (-180.0...180.0).contains(lon) else { return nil }
+        return CLLocationCoordinate2D(latitude: lat, longitude: lon)
     }
 }
 
@@ -35,87 +180,150 @@ struct MapTabView: View {
     @Environment(AgentAPIClient.self) private var agentAPI
     @Environment(AgentSessionStore.self) private var sessionStore
     @Environment(LocationManager.self) private var locationManager
+    @Environment(\.openURL) private var openURL
 
-    @State private var cameraPosition: MapCameraPosition = .region(
-        MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: 28.6139, longitude: 77.2090),
-            span: MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)
-        )
-    )
-    @State private var selectedUnitID: String?
+    @State private var selectedMarkerID: String?
     @State private var searchText = ""
     @State private var mapLoading = false
     @State private var mapError: String?
-    /// Last assistant text from the map refresh action (any `response_type`).
     @State private var lastMapAssistantText: String?
+    @State private var cameraRequestID = UUID()
 
-    private let sampleUnits: [AmbulanceAnnotation] = [
-        AmbulanceAnnotation(id: "AMB-2847", coordinate: .init(latitude: 28.617, longitude: 77.212), status: .enRoute, type: "Advanced Life Support"),
-        AmbulanceAnnotation(id: "AMB-1192", coordinate: .init(latitude: 28.610, longitude: 77.205), status: .active, type: "Basic Life Support"),
-        AmbulanceAnnotation(id: "AMB-3301", coordinate: .init(latitude: 28.620, longitude: 77.200), status: .active, type: "Advanced Life Support"),
-    ]
+    private let fallbackCenter = CLLocationCoordinate2D(latitude: 41.8781, longitude: -87.6298)
 
-    private let sampleZones: [AlertZone] = [
-        AlertZone(id: "z1", coordinate: .init(latitude: 28.615, longitude: 77.209), radiusMeters: 300, severity: .danger),
-        AlertZone(id: "z2", coordinate: .init(latitude: 28.620, longitude: 77.215), radiusMeters: 500, severity: .safe),
-    ]
+    private var mapPayload: MapPayloadDTO? {
+        sessionStore.lastResponse?.mapPayload
+    }
 
-    private var selectedUnit: AmbulanceAnnotation? {
-        sampleUnits.first { $0.id == selectedUnitID }
+    private var centerCoordinate: CLLocationCoordinate2D {
+        if let requester = mapPayload?.requester?.coordinate {
+            return requester
+        }
+        if let device = locationManager.coordinate {
+            return device
+        }
+        return fallbackCenter
+    }
+
+    private var renderedMarkers: [LiveMapMarker] {
+        var markers: [LiveMapMarker] = []
+        var seen = Set<String>()
+
+        if let requester = mapPayload?.requester,
+           let coordinate = requester.coordinate {
+            let id = requester.userId ?? "requester"
+            markers.append(
+                LiveMapMarker(
+                    id: id,
+                    coordinate: coordinate,
+                    name: "You",
+                    subtitle: requester.role?.capitalized ?? "Current location",
+                    kind: .requester
+                )
+            )
+            seen.insert(id)
+        } else if let coordinate = locationManager.coordinate {
+            markers.append(
+                LiveMapMarker(
+                    id: "device-location",
+                    coordinate: coordinate,
+                    name: "You",
+                    subtitle: "Current location",
+                    kind: .requester
+                )
+            )
+            seen.insert("device-location")
+        }
+
+        if let matchedUser = mapPayload?.matchedUser,
+           let coordinate = matchedUser.coordinate {
+            let id = matchedUser.userId ?? "matched-user"
+            if !seen.contains(id) {
+                markers.append(
+                    LiveMapMarker(
+                        id: id,
+                        coordinate: coordinate,
+                        name: matchedUser.name ?? matchedUser.userId ?? "Matched User",
+                        subtitle: actorSubtitle(matchedUser, fallback: "Matched user"),
+                        kind: .matchedUser
+                    )
+                )
+                seen.insert(id)
+            }
+        }
+
+        for actor in mapPayload?.nearbyHelpers ?? [] {
+            guard let coordinate = actor.coordinate else { continue }
+            let id = actor.userId ?? "nearby-\(coordinate.latitude)-\(coordinate.longitude)"
+            if seen.contains(id) { continue }
+            markers.append(
+                LiveMapMarker(
+                    id: id,
+                    coordinate: coordinate,
+                    name: actor.name ?? actor.userId ?? "Nearby User",
+                    subtitle: actorSubtitle(actor, fallback: "Nearby user"),
+                    kind: .nearbyUser
+                )
+            )
+            seen.insert(id)
+        }
+
+        return markers
+    }
+
+    private var routeCoordinates: [CLLocationCoordinate2D] {
+        mapPayload?.routeCoordinates?.compactMap(\.coordinate) ?? []
+    }
+
+    private var selectedMarker: LiveMapMarker? {
+        renderedMarkers.first { $0.id == selectedMarkerID }
     }
 
     var body: some View {
         ZStack(alignment: .top) {
-            Map(position: $cameraPosition) {
-                ForEach(sampleZones) { zone in
-                    MapCircle(center: zone.coordinate, radius: zone.radiusMeters)
-                        .foregroundStyle(zoneColor(zone.severity))
-                        .stroke(zoneStroke(zone.severity), lineWidth: 1.5)
-                }
-
-                ForEach(sampleUnits) { unit in
-                    Annotation(unit.id, coordinate: unit.coordinate) {
-                        Button {
-                            withAnimation(.spring(duration: 0.3)) {
-                                selectedUnitID = selectedUnitID == unit.id ? nil : unit.id
-                            }
-                        } label: {
-                            ambulanceMarker(unit)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-
-                UserAnnotation()
+            if MapsConfiguration.isReady {
+                GoogleLiveMapView(
+                    centerCoordinate: centerCoordinate,
+                    markers: renderedMarkers,
+                    routeCoordinates: routeCoordinates,
+                    cameraRequestID: cameraRequestID,
+                    selectedMarkerID: $selectedMarkerID
+                )
+                .ignoresSafeArea(edges: .top)
+            } else {
+                unavailableMapView
+                    .ignoresSafeArea(edges: .top)
             }
-            .mapControls {
-                MapUserLocationButton()
-                MapCompass()
-                MapScaleView()
-            }
-            .ignoresSafeArea(edges: .top)
 
             VStack(spacing: Spacing.space3) {
                 searchBar
                 backendBanner
-                if let selected = selectedUnit {
-                    unitDetailSheet(selected)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                }
             }
             .padding(.horizontal, Spacing.screenPaddingH)
             .padding(.top, Spacing.space12)
-            .animation(.spring(duration: 0.3), value: selectedUnitID)
 
             VStack {
                 Spacer()
-                mapLegend
-                    .padding(.horizontal, Spacing.screenPaddingH)
-                    .padding(.bottom, Spacing.space4)
+                if let selectedMarker {
+                    markerDetailCard(selectedMarker)
+                        .padding(.horizontal, Spacing.screenPaddingH)
+                        .padding(.bottom, Spacing.space4)
+                }
             }
         }
         .onAppear {
             locationManager.requestWhenInUse()
+            cameraRequestID = UUID()
+        }
+        .onChange(of: locationManager.coordinate?.latitude) {
+            if mapPayload?.requester == nil {
+                cameraRequestID = UUID()
+            }
+        }
+        .onChange(of: locationManager.coordinate?.longitude) {
+            if mapPayload?.requester == nil {
+                cameraRequestID = UUID()
+            }
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -128,82 +336,200 @@ struct MapTabView: View {
                         Image(systemName: "arrow.triangle.2.circlepath")
                     }
                 }
-                .disabled(mapLoading)
-                .accessibilityLabel("Refresh from assistant")
+                .disabled(mapLoading || !MapsConfiguration.isReady)
+                .accessibilityLabel("Refresh live map")
             }
         }
     }
 
-    /// Calls backend with `MAP` intent; shows `chat_message` / map payload hints without fabricating units.
+    // MARK: - Header
+
+    private var searchBar: some View {
+        AppTextField(
+            placeholder: "Search helpers or refresh nearby users...",
+            text: $searchText,
+            icon: "magnifyingglass",
+            trailingIcon: mapLoading ? nil : trailingSearchIcon,
+            isPill: false,
+            onTrailingAction: handleSearchAction,
+            onSubmit: handleSearchAction
+        )
+        .appShadow(.elevated)
+    }
+
+    private var trailingSearchIcon: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "location.fill" : "arrow.up"
+    }
+
     private var backendBanner: some View {
         Group {
-            if let err = mapError {
-                Text(err)
-                    .textStyle(.caption)
+            if !MapsConfiguration.isReady {
+                bannerText("Google Maps is not configured. Add a valid API key and Map ID in the app settings.")
                     .foregroundStyle(SemanticColor.statusError)
-                    .padding(Spacing.space3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
                     .background(SemanticColor.statusError.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.sm))
+            } else if let err = mapError {
+                bannerText(err)
+                    .foregroundStyle(SemanticColor.statusError)
+                    .background(SemanticColor.statusError.opacity(0.1))
             } else if let msg = lastMapAssistantText?.trimmingCharacters(in: .whitespacesAndNewlines), !msg.isEmpty {
-                Text(msg)
-                    .textStyle(.caption)
+                bannerText(msg)
                     .foregroundStyle(SemanticColor.textPrimary)
-                    .padding(Spacing.space3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
                     .background(.ultraThinMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.sm))
             }
         }
+    }
+
+    private var unavailableMapView: some View {
+        ZStack {
+            LinearGradient(
+                colors: [SemanticColor.bgTinted, ComponentColor.Screen.bg],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            VStack(spacing: Spacing.space3) {
+                Image(systemName: "map.circle")
+                    .font(.system(size: 44, weight: .semibold))
+                    .foregroundStyle(SemanticColor.actionPrimary)
+                Text("Google Maps Unavailable")
+                    .textStyle(.headingMD)
+                    .foregroundStyle(SemanticColor.textPrimary)
+                Text("The map preview can’t create a Google map until the SDK is initialized with a valid API key.")
+                    .textStyle(.body)
+                    .foregroundStyle(SemanticColor.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 320)
+            }
+            .padding(Spacing.space6)
+        }
+    }
+
+    private func bannerText(_ text: String) -> some View {
+        Text(text)
+            .textStyle(.caption)
+            .padding(Spacing.space3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.sm))
+    }
+
+    private func markerDetailCard(_ marker: LiveMapMarker) -> some View {
+        InfoCard {
+            VStack(alignment: .leading, spacing: Spacing.space3) {
+                HStack {
+                    VStack(alignment: .leading, spacing: Spacing.space1) {
+                        Text(marker.name)
+                            .textStyle(.labelBold)
+                            .foregroundStyle(SemanticColor.textPrimary)
+                        Text(marker.subtitle)
+                            .textStyle(.caption)
+                            .foregroundStyle(SemanticColor.textSecondary)
+                    }
+                    Spacer()
+                    Text(marker.kind.title)
+                        .textStyle(.captionMedium)
+                        .foregroundStyle(SemanticColor.actionPrimary)
+                        .padding(.horizontal, Spacing.space3)
+                        .padding(.vertical, Spacing.space1_5)
+                        .background(SemanticColor.actionPrimary.opacity(0.08))
+                        .clipShape(Capsule())
+                }
+
+                HStack(spacing: Spacing.space3) {
+                    AppButton(
+                        title: "Center",
+                        icon: "location.fill",
+                        style: .secondary,
+                        isFullWidth: true
+                    ) {
+                        selectedMarkerID = marker.id
+                        cameraRequestID = UUID()
+                    }
+
+                    if marker.kind != .requester {
+                        AppButton(
+                            title: "Directions",
+                            icon: "arrow.triangle.turn.up.right.diamond.fill",
+                            style: .outline,
+                            isFullWidth: true
+                        ) {
+                            openDirections(to: marker.coordinate)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Actions
+
+    private func handleSearchAction() {
+        if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            selectedMarkerID = nil
+            cameraRequestID = UUID()
+            return
+        }
+        Task { await askMapAgent() }
     }
 
     private func askMapAgent() async {
+        guard MapsConfiguration.isReady else {
+            await MainActor.run {
+                mapError = "Google Maps is not configured for this build."
+            }
+            return
+        }
+
         await MainActor.run {
             mapError = nil
         }
+
         let token: String? = await withCheckedContinuation { cont in
             Auth.auth().currentUser?.getIDTokenForcingRefresh(false) { token, _ in
                 cont.resume(returning: token)
             } ?? cont.resume(returning: nil)
         }
+
         let pair = locationManager.latLonPair
         guard let pair else {
             await MainActor.run {
-                mapError = "Turn on location to use the map assistant."
+                mapError = "Turn on location to use the live map."
             }
             return
         }
-        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "nearby helpers"
+
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "Find nearby helpers on the live map"
             : searchText.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        await MainActor.run { mapLoading = true }
-        defer { Task { @MainActor in mapLoading = false } }
+        await MainActor.run {
+            mapLoading = true
+        }
+        defer {
+            Task { @MainActor in
+                mapLoading = false
+            }
+        }
 
         do {
             let res = try await agentAPI.sendChat(
                 userId: authService.backendUserId,
                 sessionId: SessionIdentity.sessionId,
-                query: q,
+                query: query,
                 lat: pair.lat,
                 lon: pair.lon,
-                triggerType: "CHAT",
+                triggerType: "MAP",
                 idToken: token
             )
+
             let assistantText = [res.chatMessage, res.mapPayload?.message]
                 .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .first { !$0.isEmpty }
+
             await MainActor.run {
                 sessionStore.lastResponse = res
                 lastMapAssistantText = assistantText
-                withAnimation {
-                    cameraPosition = .region(
-                        MKCoordinateRegion(
-                            center: CLLocationCoordinate2D(latitude: pair.lat, longitude: pair.lon),
-                            span: MKCoordinateSpan(latitudeDelta: 0.04, longitudeDelta: 0.04)
-                        )
-                    )
-                }
+                selectedMarkerID = selectionID(from: res.mapPayload)
+                cameraRequestID = UUID()
             }
         } catch {
             await MainActor.run {
@@ -212,125 +538,31 @@ struct MapTabView: View {
         }
     }
 
-    // MARK: - Search Bar
-
-    private var searchBar: some View {
-        AppTextField(
-            placeholder: "Search location or unit...",
-            text: $searchText,
-            icon: "magnifyingglass",
-            isPill: false
-        )
-        .appShadow(.elevated)
+    private func openDirections(to coordinate: CLLocationCoordinate2D) {
+        let lat = String(format: "%.6f", coordinate.latitude)
+        let lon = String(format: "%.6f", coordinate.longitude)
+        guard let url = URL(string: "https://www.google.com/maps/dir/?api=1&destination=\(lat),\(lon)") else {
+            return
+        }
+        openURL(url)
     }
 
-    // MARK: - Ambulance Marker
-
-    private func ambulanceMarker(_ unit: AmbulanceAnnotation) -> some View {
-        VStack(spacing: 0) {
-            ZStack {
-                Circle()
-                    .fill(SemanticColor.actionPrimary)
-                    .frame(width: 36, height: 36)
-                Image(systemName: "cross.fill")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(BrandColor.white)
-            }
-            .appShadow(.elevated)
-
-            Image(systemName: "triangle.fill")
-                .font(.system(size: 8))
-                .foregroundStyle(SemanticColor.actionPrimary)
-                .rotationEffect(.degrees(180))
-                .offset(y: -3)
+    private func actorSubtitle(_ actor: MapActorDTO, fallback: String) -> String {
+        let role = actor.role?.replacingOccurrences(of: "_", with: " ").capitalized ?? fallback
+        if let distance = actor.distance {
+            return "\(role) • \(Int(distance))m away"
         }
+        return role
     }
 
-    // MARK: - Unit Detail Sheet
-
-    private func unitDetailSheet(_ unit: AmbulanceAnnotation) -> some View {
-        InfoCard {
-            HStack(spacing: Spacing.space3) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: AppRadius.sm)
-                        .fill(SemanticColor.actionPrimary.opacity(0.1))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "cross.vial.fill")
-                        .foregroundStyle(SemanticColor.actionPrimary)
-                }
-
-                VStack(alignment: .leading, spacing: Spacing.space1) {
-                    HStack {
-                        Text(unit.id)
-                            .textStyle(.labelBold)
-                            .foregroundStyle(SemanticColor.textPrimary)
-                        StatusBadge(variant: unit.status)
-                    }
-                    Text(unit.type)
-                        .textStyle(.caption)
-                        .foregroundStyle(SemanticColor.textSecondary)
-                }
-
-                Spacer()
-
-                Button {
-                    let gen = UIImpactFeedbackGenerator(style: .medium)
-                    gen.impactOccurred()
-                } label: {
-                    Image(systemName: "phone.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(BrandColor.white)
-                        .frame(width: 36, height: 36)
-                        .background(SemanticColor.actionPrimary)
-                        .clipShape(Circle())
-                }
-            }
+    private func selectionID(from payload: MapPayloadDTO?) -> String? {
+        if let matched = payload?.matchedUser {
+            return matched.userId ?? "matched-user"
         }
-    }
-
-    // MARK: - Map Legend
-
-    private var mapLegend: some View {
-        HStack(spacing: Spacing.space4) {
-            legendItem(color: SemanticColor.statusError.opacity(0.3), label: "Danger Zone")
-            legendItem(color: SemanticColor.statusSuccess.opacity(0.3), label: "Safe Zone")
-            legendItem(color: SemanticColor.actionPrimary, label: "Ambulance", isCircle: true)
+        if let first = payload?.nearbyHelpers?.first {
+            return first.userId ?? first.coordinate.map { "nearby-\($0.latitude)-\($0.longitude)" }
         }
-        .padding(.horizontal, Spacing.space4)
-        .padding(.vertical, Spacing.space2)
-        .background(.ultraThinMaterial)
-        .clipShape(Capsule())
-    }
-
-    private func legendItem(color: Color, label: String, isCircle: Bool = false) -> some View {
-        HStack(spacing: Spacing.space1_5) {
-            if isCircle {
-                Circle().fill(color).frame(width: 10, height: 10)
-            } else {
-                RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 14, height: 10)
-            }
-            Text(label)
-                .textStyle(.caption)
-                .foregroundStyle(SemanticColor.textPrimary)
-        }
-    }
-
-    // MARK: - Zone Colors
-
-    private func zoneColor(_ severity: AlertZone.ZoneSeverity) -> Color {
-        switch severity {
-        case .danger:  return SemanticColor.statusError.opacity(0.15)
-        case .caution: return SemanticColor.statusWarning.opacity(0.15)
-        case .safe:    return SemanticColor.statusSuccess.opacity(0.15)
-        }
-    }
-
-    private func zoneStroke(_ severity: AlertZone.ZoneSeverity) -> Color {
-        switch severity {
-        case .danger:  return SemanticColor.statusError.opacity(0.4)
-        case .caution: return SemanticColor.statusWarning.opacity(0.4)
-        case .safe:    return SemanticColor.statusSuccess.opacity(0.4)
-        }
+        return nil
     }
 }
 

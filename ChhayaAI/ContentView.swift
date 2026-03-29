@@ -1,7 +1,9 @@
 import SwiftUI
+import UIKit
 
 struct ContentView: View {
     @Environment(AuthService.self) private var authService
+    @Environment(\.openURL) private var openURL
     @State private var selectedTab: AppTab = .dashboard
 
     var body: some View {
@@ -52,8 +54,12 @@ struct ContentView: View {
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
                             Menu {
-                                Button("Mark All Read", systemImage: "checkmark.circle") {}
-                                Button("Settings", systemImage: "gearshape") {}
+                                Button("Mark All Read", systemImage: "checkmark.circle") {
+                                    selectedTab = .feed
+                                }
+                                Button("Settings", systemImage: "gearshape") {
+                                    openAppSettings()
+                                }
                             } label: {
                                 Image(systemName: "ellipsis.circle")
                                     .foregroundStyle(SemanticColor.iconSecondary)
@@ -73,7 +79,9 @@ struct ContentView: View {
     // MARK: - Toolbar Items
 
     private var notificationBell: some View {
-        Button {} label: {
+        Button {
+            selectedTab = .feed
+        } label: {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: "bell.fill")
                     .font(.system(size: 16))
@@ -90,6 +98,9 @@ struct ContentView: View {
         Menu {
             Text(authService.displayName)
             Divider()
+            Button("App Settings", systemImage: "gearshape") {
+                openAppSettings()
+            }
             Button("Sign Out", systemImage: "rectangle.portrait.and.arrow.right") {
                 authService.signOut()
             }
@@ -103,6 +114,11 @@ struct ContentView: View {
                     .foregroundStyle(SemanticColor.actionPrimary)
             }
         }
+    }
+
+    private func openAppSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        openURL(url)
     }
 }
 

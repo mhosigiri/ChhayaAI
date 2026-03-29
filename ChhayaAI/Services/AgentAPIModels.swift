@@ -28,12 +28,26 @@ struct MapPayloadDTO: Decodable {
     let emergency: Bool?
     let distance: Double?
     let matchStatus: String?
-    let matchedUser: MatchedUserDTO?
+    let matchId: String?
+    let matchType: String?
+    let requester: MapActorDTO?
+    let matchedUser: MapActorDTO?
+    let nearbyHelpers: [MapActorDTO]?
+    let routeCoordinates: [MapCoordinateDTO]?
 }
 
-struct MatchedUserDTO: Decodable {
+struct MapActorDTO: Decodable {
     let userId: String?
+    let name: String?
     let role: String?
+    let lat: Double?
+    let lon: Double?
+    let distance: Double?
+}
+
+struct MapCoordinateDTO: Decodable {
+    let lat: Double?
+    let lon: Double?
 }
 
 struct AlertPayloadDTO: Decodable {

@@ -22,6 +22,9 @@ CONTRACT_KEYS = (
 
 _WHITELIST_INTENTS = frozenset({"ALERT", "MAP", "DATA"})
 _EMERGENCY_TRIGGERS = frozenset({"EMERGENCY_BUTTON", "EMERGENCY"})
+_MAP_TRIGGERS = frozenset({"MAP", "MAP_REFRESH"})
+_ALERT_TRIGGERS = frozenset({"ALERT", "ALERT_REQUEST"})
+_SHARE_NEARBY_TRIGGERS = frozenset({"SHARE_TO_NEARBY"})
 
 
 def sanitize_query(query: Any) -> str:
@@ -152,6 +155,11 @@ def extract_nearby_helpers_from_map(map_norm: dict | None) -> list | None:
     mp = map_norm.get("map_payload")
     if not isinstance(mp, dict):
         return None
+    nearby = mp.get("nearby_helpers")
+    if isinstance(nearby, list):
+        filtered = [item for item in nearby if isinstance(item, dict) and item.get("user_id") is not None]
+        if filtered:
+            return filtered
     matched = mp.get("matched_user")
     if not isinstance(matched, dict):
         return None
@@ -170,6 +178,12 @@ class SupervisorRouter:
         if trigger_type == "EMERGENCY_BUTTON":
             logger.info("supervisor.route: EMERGENCY (trigger)")
             return "EMERGENCY"
+        if trigger_type in _MAP_TRIGGERS:
+            logger.info("supervisor.route: MAP (trigger)")
+            return "MAP"
+        if trigger_type in _ALERT_TRIGGERS:
+            logger.info("supervisor.route: ALERT (trigger)")
+            return "ALERT"
         try:
             raw = self._llm.classify_intent(query)
         except Exception as e:
@@ -305,6 +319,73 @@ def process_user_request(user_id, session_id, query, lat, lon, trigger_type):
             nearby_helpers=nearby,
         )
         return _merge_emergency_response(map_norm, alert_norm)
+
+    if trig in _SHARE_NEARBY_TRIGGERS:
+        if not is_valid_location(lat, lon):
+            logger.warning("supervisor: SHARE_TO_NEARBY blocked — invalid location")
+            return build_supervisor_error_response(
+                "Location is required to notify nearby users. Enable location and try again.",
+                response_type="ALERT",
+                ui_actions=["SHOW_ERROR", "OPEN_MAP_SCREEN", "OPEN_ALERT_SCREEN"],
+            )
+
+        map_norm = _run_map_agent(
+            user_id=user_id,
+            session_id=session_id,
+            query=q or "share my live location with nearby users",
+            lat=float(lat),
+            lon=float(lon),
+            emergency=False,
+            request_mode="VICTIM",
+        )
+        nearby = extract_nearby_helpers_from_map(map_norm)
+
+        if not nearby:
+            logger.info("supervisor: SHARE_TO_NEARBY found no nearby users")
+            return build_supervisor_success_response(
+                response_type="ALERT",
+                chat_message="No nearby users are currently available. Keep location enabled and try again shortly.",
+                map_payload=map_norm.get("map_payload") if map_norm else None,
+                alert_payload=None,
+                data_payload=None,
+                ui_actions=["OPEN_MAP_SCREEN", "SHOW_SEARCHING_STATUS"],
+            )
+
+        alert_norm = _run_alert_agent(
+            user_id=user_id,
+            session_id=session_id,
+            query=q or "Share live location with nearby users",
+            lat=float(lat),
+            lon=float(lon),
+            emergency=False,
+            nearby_helpers=nearby,
+        )
+        if alert_norm is None:
+            logger.warning("supervisor: SHARE_TO_NEARBY alert dispatch failed")
+            return build_supervisor_error_response(
+                "Nearby-user notification could not be sent right now.",
+                response_type="ALERT",
+                map_payload=map_norm.get("map_payload") if map_norm else None,
+                alert_payload=None,
+                ui_actions=["SHOW_ERROR", "OPEN_MAP_SCREEN", "OPEN_ALERT_SCREEN"],
+            )
+
+        ui_actions = ["OPEN_MAP_SCREEN", "OPEN_ALERT_SCREEN"]
+        for action in (map_norm.get("ui_actions") if map_norm else []) or []:
+            if action not in ui_actions:
+                ui_actions.append(action)
+        for action in alert_norm.get("ui_actions") or []:
+            if action not in ui_actions:
+                ui_actions.append(action)
+
+        return build_supervisor_success_response(
+            response_type="ALERT",
+            chat_message=alert_norm.get("chat_message") or "Nearby users have been notified.",
+            map_payload=map_norm.get("map_payload") if map_norm else None,
+            alert_payload=alert_norm.get("alert_payload"),
+            data_payload=None,
+            ui_actions=ui_actions,
+        )
 
     intent = _default_router.route(q, trig)
 
